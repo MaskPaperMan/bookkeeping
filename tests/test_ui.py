@@ -92,6 +92,8 @@ class DesktopUITests(unittest.TestCase):
     def test_main_controls_are_visible(self):
         from tkinter import ttk
         self.settle()
+        self.assertEqual(self.root.title(), '台账')
+        self.assertEqual((self.root._app_icon.width(), self.root._app_icon.height()), (256, 256))
         def children(widget):
             for child in widget.winfo_children():
                 yield child
@@ -160,4 +162,121 @@ class DesktopUITests(unittest.TestCase):
         self.assertEqual(len(self.store.entries(customer_id)), 2)
         self.assertEqual(self.store.balance(customer_id)['receivable'], 3000)
         self.assertEqual(self.store.balance(customer_id)['advance_received'], 0)
+        self.errors.assert_not_called()
+
+    def test_expense_tab_entry_filters_and_history_payee(self):
+        from tkinter import ttk
+        self.app.notebook.select(self.app.expense_tab)
+        self.settle()
+        page = self.app.expense_page
+        self.assertTrue(page.table.winfo_ismapped())
+        self.assertFalse(self.app.clients.winfo_ismapped())
+        page.new_expense()
+        form = self.form()
+        form.values['amount'].set('20.50')
+        form.values['payee'].set('供应商甲')
+        form.values['note'].set('采购')
+        form.save()
+        self.settle()
+        self.assertEqual(len(page.table.get_children()), 1)
+        self.assertIn('20.50', page.summary.cget('text'))
+        page.new_expense()
+        form = self.form()
+        def descend(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descend(child)
+        payee_box = next(widget for widget in descend(form)
+                         if isinstance(widget, ttk.Combobox) and tuple(widget['values']) == ('供应商甲',))
+        self.assertEqual(str(payee_box['state']), 'normal')
+        form.values['amount'].set('10')
+        form.values['payee'].set('供应商乙')
+        form.save()
+        self.settle()
+        page.query.set('甲')
+        page.refresh()
+        self.assertEqual(len(page.table.get_children()), 1)
+        page.reset()
+        self.assertEqual(len(page.table.get_children()), 2)
+        self.app.notebook.select(self.app.income_tab)
+        self.settle()
+        self.assertTrue(self.app.clients.winfo_ismapped())
+        self.assertEqual(len(self.store.customers()), 0)
+        self.errors.assert_not_called()
+
+    def test_expense_void_updates_totals_and_category_management(self):
+        from ledger.expense_ui import CategoryDialog
+        self.app.notebook.select(self.app.expense_tab)
+        self.settle()
+        page = self.app.expense_page
+        page.manage_categories()
+        dialog = next(child for child in self.root.winfo_children() if isinstance(child, CategoryDialog))
+        dialog.name.set('测试类别')
+        dialog.add()
+        category = next(row for row in self.store.expense_categories() if row['name'] == '测试类别')
+        dialog.destroy()
+        page.category.set('测试类别')
+        page.new_expense()
+        form = self.form()
+        form.values['amount'].set('100')
+        form.save()
+        self.settle()
+        expense = self.store.expenses()[0]
+        page.table.selection_set(str(expense['id']))
+        with patch('ledger.expense_ui.simpledialog.askstring', return_value='误记'):
+            page.void_expense()
+        self.assertIn('0.00', page.summary.cget('text'))
+        self.assertEqual(self.store.expenses()[0]['void_reason'], '误记')
+        page.manage_categories()
+        dialog = next(child for child in self.root.winfo_children() if isinstance(child, CategoryDialog))
+        dialog.table.selection_set(str(category['id']))
+        with patch('ledger.expense_ui.messagebox.askyesno', return_value=True):
+            dialog.remove()
+        dialog.destroy()
+        self.assertNotIn(category['id'], [row['id'] for row in self.store.expense_categories()])
+        self.assertEqual(self.store.expenses()[0]['category'], '测试类别')
+        self.errors.assert_not_called()
+
+    def test_restore_refreshes_expense_tab(self):
+        category = self.store.expense_categories()[0]['id']
+        self.store.add_expense('2026-10-27', category, '20')
+        backup = self.store.path.parent / 'backup.sqlite3'
+        self.store.backup(backup)
+        self.store.add_expense('2026-10-27', category, '30')
+        self.app.notebook.select(self.app.expense_tab)
+        self.settle()
+        self.assertEqual(len(self.app.expense_page.table.get_children()), 2)
+        with patch('ledger.ui.filedialog.askopenfilename', return_value=str(backup)), \
+                patch('ledger.ui.messagebox.askyesno', return_value=True), \
+                patch('ledger.ui.messagebox.showinfo'):
+            self.app.restore()
+        self.settle()
+        self.assertEqual(len(self.app.expense_page.table.get_children()), 1)
+        self.errors.assert_not_called()
+
+    def test_category_dialog_controls_fit_small_and_large_windows(self):
+        from ledger.expense_ui import CategoryDialog
+        self.app.notebook.select(self.app.expense_tab)
+        self.settle()
+        for index in range(20):
+            self.store.add_expense_category('自定义类别{}'.format(index))
+        self.app.expense_page.manage_categories()
+        dialog = next(child for child in self.root.winfo_children() if isinstance(child, CategoryDialog))
+        for geometry in ('480x460', '400x340', '640x550'):
+            with self.subTest(geometry=geometry):
+                dialog.geometry(geometry)
+                self.settle()
+                left, top = dialog.winfo_rootx(), dialog.winfo_rooty()
+                right, bottom = left + dialog.winfo_width(), top + dialog.winfo_height()
+                for widget in (dialog.name_entry, dialog.add_button, dialog.delete_button, dialog.close_button):
+                    self.assertTrue(widget.winfo_ismapped())
+                    self.assertGreaterEqual(widget.winfo_height(), widget.winfo_reqheight())
+                    self.assertGreaterEqual(widget.winfo_rootx(), left)
+                    self.assertGreaterEqual(widget.winfo_rooty(), top)
+                    self.assertLessEqual(widget.winfo_rootx() + widget.winfo_width(), right)
+                    self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(), bottom)
+                for button in (dialog.add_button, dialog.delete_button, dialog.close_button):
+                    self.assertGreaterEqual(button.winfo_width(), button.winfo_reqwidth())
+                self.assertGreater(dialog.table.winfo_height(), 40)
+        dialog.destroy()
         self.errors.assert_not_called()

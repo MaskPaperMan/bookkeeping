@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ledger.domain import LedgerError, MAX_CENTS, money, parse_amount
-from ledger.storage import InstanceLock, Store
+from ledger.storage import InstanceLock, Store, SCHEMA_VERSION
 from ledger.runtime import check_tk_runtime
 
 
@@ -164,7 +164,7 @@ class StoreTests(unittest.TestCase):
         untouched.write_bytes(legacy.read_bytes())
         upgraded = Store(legacy)
         try:
-            self.assertEqual(upgraded.db.execute('PRAGMA user_version').fetchone()[0], 2)
+            self.assertEqual(upgraded.db.execute('PRAGMA user_version').fetchone()[0], SCHEMA_VERSION)
             self.assertEqual(upgraded.balance(1)['receivable'], 10000)
             self.assertEqual(upgraded.entries(1)[0]['note'], '原始备注')
             upgraded.record_transaction(1, '2026-10-27', 'repayment', '40')
@@ -173,7 +173,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(len(list((self.folder / 'backups').glob('before-upgrade-*.sqlite3'))), 1)
         self.store.restore(untouched)
         self.assertEqual(self.store.balance(1)['receivable'], 10000)
-        self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 2)
+        self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], SCHEMA_VERSION)
 
     def test_recharge_does_not_repay_existing_debt(self):
         self.record('sale', '100', credit=True)

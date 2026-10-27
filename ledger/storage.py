@@ -10,8 +10,9 @@ from pathlib import Path
 from .domain import (CUSTOMER_ACCOUNTS, CUSTOMER_LABELS,
                      KINDS, LedgerError, balances,
                      money, parse_amount, prepaid_deduction, validate_date)
+from .expenses import ExpenseStore, EXPENSE_DDL, seed_categories, validate_expenses
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA = '''
 CREATE TABLE customers (
     id INTEGER PRIMARY KEY, name TEXT NOT NULL CHECK(length(trim(name)) > 0),
@@ -27,8 +28,7 @@ CREATE TABLE entries (
     void_reason TEXT NOT NULL DEFAULT '', voided_at TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX entries_customer_day ON entries(customer_id, day, id);
-PRAGMA user_version=2;
-'''
+''' + '\n'.join(sql + ';' for sql in EXPENSE_DDL) + '\nPRAGMA user_version=3;'
 
 
 def data_directory():
@@ -36,7 +36,7 @@ def data_directory():
         root = os.environ.get('LOCALAPPDATA')
         if not root:
             raise LedgerError('无法找到 LOCALAPPDATA 用户数据目录。')
-        return Path(root) / '客户往来记账'
+        return Path(root) / '客户往来记账'  # 保留旧版目录，软件改名不改变账本位置。
     return Path.home() / '.customer-ledger'
 
 
@@ -66,7 +66,7 @@ class InstanceLock:
             self.file.close()
 
 
-class Store:
+class Store(ExpenseStore):
     def __init__(self, path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +75,9 @@ class Store:
         try:
             if new:
                 self.db.executescript(SCHEMA)
-            elif self.db.execute('PRAGMA user_version').fetchone()[0] == 1:
+                with self.db:
+                    seed_categories(self.db)
+            elif self.db.execute('PRAGMA user_version').fetchone()[0] in (1, 2):
                 self._validate(self.db, allow_legacy=True)
                 self.backup(self.path.parent / 'backups' / (
                     'before-upgrade-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.sqlite3'))
@@ -102,14 +104,18 @@ class Store:
     def _upgrade_schema(db):
         with db:
             db.execute('BEGIN IMMEDIATE')
-            db.execute('ALTER TABLE entries ADD COLUMN prepaid_cents INTEGER NOT NULL '
-                       'DEFAULT 0 CHECK(prepaid_cents >= 0)')
-            db.execute('PRAGMA user_version=2')
+            if db.execute('PRAGMA user_version').fetchone()[0] == 1:
+                db.execute('ALTER TABLE entries ADD COLUMN prepaid_cents INTEGER NOT NULL '
+                           'DEFAULT 0 CHECK(prepaid_cents >= 0)')
+            for statement in EXPENSE_DDL:
+                db.execute(statement)
+            seed_categories(db)
+            db.execute('PRAGMA user_version=3')
 
     @staticmethod
     def _validate(db, allow_legacy=False):
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version != SCHEMA_VERSION and not (allow_legacy and version == 1):
+        if version != SCHEMA_VERSION and not (allow_legacy and version in (1, 2)):
             raise LedgerError('账本版本不兼容，无法打开或恢复。')
         if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise LedgerError('账本文件损坏。')
@@ -120,7 +126,7 @@ class Store:
             'entries': {'id', 'customer_id', 'day', 'kind', 'cents', 'note',
                         'created_at', 'voided', 'void_reason', 'voided_at'},
         }
-        if version == 2:
+        if version >= 2:
             required['entries'].add('prepaid_cents')
         for table, columns in required.items():
             actual = {row[1] for row in db.execute('PRAGMA table_info(' + table + ')')}
@@ -143,13 +149,15 @@ class Store:
                     raise LedgerError('流水数据无效。')
                 if version == 1 and row['kind'] in ('sale_split_cash', 'sale_split_credit'):
                     raise LedgerError('旧版账本含不兼容的抵扣记录。')
-                if version == 2:
+                if version >= 2:
                     prepaid = row['prepaid_cents']
                     if (type(prepaid) is not int or prepaid < 0 or prepaid > row['cents']
                             or (row['kind'] not in ('sale_split_cash', 'sale_split_credit') and prepaid)
                             or (row['kind'] in ('sale_split_cash', 'sale_split_credit') and prepaid == row['cents'])):
                         raise LedgerError('流水抵扣数据无效。')
             balances(rows)
+        if version >= 3:
+            validate_expenses(db)
 
     @contextmanager
     def transaction(self):
@@ -345,7 +353,7 @@ class Store:
             candidate = self._connect(name)
             try:
                 self._validate(candidate, allow_legacy=True)
-                if candidate.execute('PRAGMA user_version').fetchone()[0] == 1:
+                if candidate.execute('PRAGMA user_version').fetchone()[0] in (1, 2):
                     self._upgrade_schema(candidate)
                     self._validate(candidate)
             finally:

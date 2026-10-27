@@ -1,7 +1,7 @@
 [project]
 name = "customer-ledger"
-version = "0.2.0"
-description = "Offline customer payments, debt and prepaid balance tracker"
+version = "0.3.1"
+description = "Offline income, customer balances and expense tracker"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = []

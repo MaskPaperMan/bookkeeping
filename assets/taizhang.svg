@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>台账</title>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#245bd6"/>
+  <rect x="61" y="43" width="144" height="177" rx="18" fill="#1846a9"/>
+  <rect x="53" y="35" width="142" height="176" rx="16" fill="#fff"/>
+  <rect x="53" y="35" width="29" height="176" rx="14" fill="#dbe7ff"/>
+  <rect x="70" y="35" width="14" height="176" fill="#dbe7ff"/>
+  <path d="M155 35h19v50l-10-9-9 9z" fill="#ffbf47"/>
+  <rect x="99" y="73" width="41" height="8" rx="4" fill="#245bd6"/>
+  <circle cx="102" cy="118" r="11" fill="#e2f6ec"/>
+  <path d="M100 111h4v14h-4zM95 116h14v4H95z" fill="#238756"/>
+  <rect x="126" y="115" width="44" height="6" rx="3" fill="#647b9f"/>
+  <circle cx="102" cy="160" r="11" fill="#fff0e4"/>
+  <path d="M95 158h14v4H95z" fill="#c76b28"/>
+  <rect x="126" y="157" width="44" height="6" rx="3" fill="#647b9f"/>
+  <rect x="98" y="188" width="72" height="4" rx="2" fill="#d2ddec"/>
+</svg>

@@ -18,6 +18,9 @@ jobs:
     name: Python 3.8.10 x86 / Windows 7 target
     runs-on: windows-2022
     timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -41,20 +44,20 @@ jobs:
       - name: Generate checksum
         shell: pwsh
         run: |
-          $archive = 'dist/CustomerLedger-win7-x86.zip'
+          $archive = 'dist/Taizhang-win7-x86.zip'
           $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
-          "$hash  CustomerLedger-win7-x86.zip" | Set-Content -Encoding ascii 'dist/SHA256SUMS.txt'
+          "$hash  Taizhang-win7-x86.zip" | Set-Content -Encoding ascii 'dist/SHA256SUMS.txt'
           "## Windows build" >> $env:GITHUB_STEP_SUMMARY
           "Built with official Python 3.8.10 x86 and PyInstaller 4.8." >> $env:GITHUB_STEP_SUMMARY
-          "Download the CustomerLedger-win7-x86 artifact below, extract the ZIP, and run CustomerLedger.exe alongside all bundled files." >> $env:GITHUB_STEP_SUMMARY
+          "Download the Taizhang-win7-x86 artifact below, extract the ZIP, and run the application EXE alongside all bundled files." >> $env:GITHUB_STEP_SUMMARY
           "Windows 7 SP1 x86/x64 requires separate runtime acceptance testing. The Windows 2022 runner does not validate Windows 7 compatibility." >> $env:GITHUB_STEP_SUMMARY
 
       - name: Upload portable application and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: CustomerLedger-win7-x86
+          name: Taizhang-win7-x86
           path: |
-            dist/CustomerLedger-win7-x86.zip
+            dist/Taizhang-win7-x86.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30

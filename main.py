@@ -10,6 +10,7 @@ from ledger.storage import InstanceLock, Store, data_directory
 from ledger.ui import App
 from ledger.runtime import check_tk_runtime
 from ledger.domain import LedgerError
+from ledger.branding import APP_NAME, configure_windows_app_id
 
 
 def main(smoke_result=None):
@@ -18,6 +19,7 @@ def main(smoke_result=None):
     except LedgerError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    configure_windows_app_id()
     root = tk.Tk()
     root.withdraw()
     lock = None
@@ -46,6 +48,12 @@ def main(smoke_result=None):
             def finish_smoke_test():
                 if not app.clients.winfo_ismapped() or not app.transactions.winfo_ismapped():
                     raise RuntimeError('Application widgets did not become visible')
+                app.notebook.select(app.expense_tab)
+                root.update_idletasks()
+                if not app.expense_page.table.winfo_ismapped():
+                    raise RuntimeError('Expense page did not become visible')
+                app.notebook.select(app.income_tab)
+                root.update_idletasks()
                 Path(smoke_result).write_text('ok', encoding='ascii')
                 root.quit()
             root.after(500, finish_smoke_test)
@@ -67,7 +75,7 @@ def main(smoke_result=None):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='客户往来记账')
+    parser = argparse.ArgumentParser(description=APP_NAME)
     parser.add_argument('--smoke-test', help=argparse.SUPPRESS)
     arguments = parser.parse_args()
     sys.exit(main(arguments.smoke_test))

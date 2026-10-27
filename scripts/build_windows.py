@@ -28,8 +28,11 @@ def main():
                            'requirements-build.txt'])
     subprocess.check_call([python, '-m', 'unittest', 'discover', '-v'])
     subprocess.check_call([python, '-m', 'PyInstaller', '--noconfirm', '--clean',
-                           '--onedir', '--windowed', '--name', 'CustomerLedger', 'main.py'])
-    app = root / 'dist' / 'CustomerLedger'
+                           '--onedir', '--windowed', '--name', '台账',
+                           '--icon', 'assets/taizhang.ico', '--version-file', 'assets/windows-version.txt',
+                           '--add-data', 'assets/taizhang.png;assets',
+                           '--add-data', 'assets/taizhang.ico;assets', 'main.py'])
+    app = root / 'dist' / '台账'
     for name in ('README.md', 'WINDOWS-VALIDATION.md'):
         shutil.copyfile(str(root / name), str(app / name))
     # Test the frozen executable itself, not only the source interpreter.
@@ -37,7 +40,7 @@ def main():
         result = Path(folder) / 'smoke-result.txt'
         child_env = dict(os.environ)
         child_env['LOCALAPPDATA'] = str(Path(folder) / 'appdata')
-        subprocess.run([str(app / 'CustomerLedger.exe'), '--smoke-test', str(result)],
+        subprocess.run([str(app / '台账.exe'), '--smoke-test', str(result)],
                        env=child_env, check=True, timeout=30)
         if not result.exists() or result.read_text(encoding='ascii') != 'ok':
             raise SystemExit('Frozen EXE failed to render application widgets.')
@@ -46,7 +49,7 @@ def main():
         os.environ.get('GITHUB_SHA', 'local build') +
         '\nSource tests and frozen EXE startup smoke test passed.\n'
         'Windows 7 SP1 x86/x64 runtime acceptance is still required.\n', encoding='utf-8')
-    output = root / 'dist' / 'CustomerLedger-win7-x86.zip'
+    output = root / 'dist' / 'Taizhang-win7-x86.zip'
     with zipfile.ZipFile(str(output), 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(app.rglob('*')):
             if path.is_file():

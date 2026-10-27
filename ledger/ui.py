@@ -10,6 +10,7 @@ from tkinter import font as tkfont
 from .domain import (CUSTOMER_ACCOUNTS, CUSTOMER_LABELS, KINDS, LedgerError,
                      entry_category, money, validate_date)
 from .storage import sale_breakdown
+from .branding import APP_NAME, apply_branding
 
 
 def guarded(function):
@@ -25,7 +26,7 @@ def guarded(function):
 
 class Form(tk.Toplevel):
     def __init__(self, parent, title, fields, on_save, extra_builder=None,
-                 helper='金额单位：元；日期格式：YYYY-MM-DD'):
+                 helper='金额单位：元；日期格式：YYYY-MM-DD', editable_fields=()):
         super().__init__(parent)
         self.title(title)
         self.transient(parent)
@@ -40,7 +41,8 @@ class Form(tk.Toplevel):
             var = tk.StringVar(value=initial)
             self.values[key] = var
             if options:
-                widget = ttk.Combobox(body, textvariable=var, values=options, state='readonly', width=36)
+                widget = ttk.Combobox(body, textvariable=var, values=options,
+                                      state='normal' if key in editable_fields else 'readonly', width=36)
             else:
                 widget = ttk.Entry(body, textvariable=var, width=39)
             widget.grid(row=index, column=1, sticky='ew', pady=7)
@@ -167,7 +169,7 @@ class App:
         self.current_id = None
         self.customer_rows = []
         self.entry_rows = []
-        root.title('客户往来记账')
+        apply_branding(root)
         root.geometry('1200x780')
         root.minsize(900, 620)
         style = ttk.Style(root)
@@ -182,13 +184,18 @@ class App:
         outer.pack(fill='both', expand=True)
         top = ttk.Frame(outer)
         top.pack(fill='x')
-        ttk.Label(top, text='客户往来记账', style='Title.TLabel').pack(side='left')
-        for title, callback in [('恢复账本', self.restore), ('备份账本', self.backup),
-                                ('导出客户汇总', self.export_customers)]:
+        ttk.Label(top, text=APP_NAME, style='Title.TLabel').pack(side='left')
+        for title, callback in [('恢复账本', self.restore), ('备份账本', self.backup)]:
             ttk.Button(top, text=title, command=callback).pack(side='right', padx=3)
-        self.summary = ttk.Label(outer, padding=(0, 12), wraplength=850)
+        self.notebook = ttk.Notebook(outer)
+        self.notebook.pack(fill='both', expand=True, pady=(12, 0))
+        self.income_tab = ttk.Frame(self.notebook, padding=8)
+        self.expense_tab = ttk.Frame(self.notebook, padding=8)
+        self.notebook.add(self.income_tab, text='收入')
+        self.notebook.add(self.expense_tab, text='支出')
+        self.summary = ttk.Label(self.income_tab, padding=(0, 12), wraplength=850)
         self.summary.pack(fill='x')
-        search = ttk.Frame(outer)
+        search = ttk.Frame(self.income_tab)
         search.pack(fill='x', pady=(0, 8))
         ttk.Label(search, text='客户搜索').pack(side='left')
         self.query = tk.StringVar()
@@ -197,12 +204,13 @@ class App:
         self.show_inactive = tk.BooleanVar(value=True)
         ttk.Checkbutton(search, text='只看有欠款', variable=self.only_debt, command=self.refresh).pack(side='left')
         ttk.Checkbutton(search, text='包含停用客户', variable=self.show_inactive, command=self.refresh).pack(side='left', padx=8)
-        customer_actions = ttk.Frame(outer)
+        customer_actions = ttk.Frame(self.income_tab)
         customer_actions.pack(fill='x', pady=(0, 8))
         for title, callback in [('新增客户', self.new_customer), ('编辑客户', self.edit_customer),
-                                ('停用 / 启用', self.toggle_customer), ('删除空客户', self.delete_customer)]:
+                                ('停用 / 启用', self.toggle_customer), ('删除空客户', self.delete_customer),
+                                ('导出客户汇总', self.export_customers)]:
             ttk.Button(customer_actions, text=title, command=callback).pack(side='left', padx=2)
-        pane = ttk.Panedwindow(outer, orient='vertical')
+        pane = ttk.Panedwindow(self.income_tab, orient='vertical')
         pane.pack(fill='both', expand=True)
         clients = ttk.Frame(pane)
         pane.add(clients, weight=2)
@@ -242,6 +250,10 @@ class App:
             ('settlement', '结算明细（元）', 260), ('note', '备注', 180),
             ('status', '状态', 70), ('reason', '作废原因', 150)])
         ttk.Label(outer, text='本地账本：' + str(store.path), foreground='#666666').pack(anchor='w', pady=(8, 0))
+        from .expense_ui import ExpensePage
+        self.expense_page = ExpensePage(root, self.expense_tab, store)
+        self.notebook.bind('<<NotebookTabChanged>>', lambda event: self.expense_page.refresh()
+                           if self.notebook.select() == str(self.expense_tab) else None)
         self.query.trace_add('write', lambda *args: self.refresh())
         self.refresh()
 
@@ -431,10 +443,11 @@ class App:
     def restore(self):
         source = filedialog.askopenfilename(parent=self.root, title='选择账本备份',
             filetypes=[('账本备份', '*.sqlite3')])
-        if source and messagebox.askyesno('恢复完整账本', '恢复会替换所有客户和流水。\n'
+        if source and messagebox.askyesno('恢复完整账本', '恢复会替换收入、支出和类别等全部账本数据。\n'
                 '程序会先备份当前账本，是否继续？', parent=self.root):
             safety = self.store.restore(source)
             self.current_id = None
             self.reset_filters()
             self.refresh()
+            self.expense_page.refresh()
             messagebox.showinfo('恢复成功', '已恢复账本。恢复前备份：\n' + str(safety), parent=self.root)
