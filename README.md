@@ -128,11 +128,13 @@ build_windows.bat "C:\Python38-32\python.exe"
 脚本验证平台和 Python 版本，使用 `uv venv` 建立独立 `.build-venv`，使用 `uv pip sync` 安装锁定的构建依赖，运行核心测试和真实 Tk 界面冒烟测试，通过 PyInstaller 4.8 生成文件夹及 ZIP：
 
 ```text
-dist/台账/台账.exe
+dist/Taizhang/台账.exe
 dist/Taizhang-win7-x86.zip
 ```
 
 首次构建需联网下载构建依赖；最终程序可完全离线使用。[uv 本身最低支持 Windows 10](https://docs.astral.sh/uv/reference/policies/platforms/)，因此构建机与目标运行机分开。PyInstaller 4.8 不正式支持 Windows 7，必须将生成的同一 x86 程序包放到 Windows 7 SP1 的 x86 和 x64 系统实测，不能用较新 Windows 上成功打包来代替 Windows 7 验收。系统若提示缺少运行库，应按 Microsoft 官方渠道安装相应 Universal CRT / Visual C++ 2015–2019 x86 运行库和系统更新，不要从非官方站点下载 DLL。
+
+程序包目录使用 `Taizhang`，EXE 名称仍是 `台账.exe`。这是为了兼容旧版 Tcl/Tk 在英文 Windows 上对运行库目录的处理；启动时也会尝试使用 Windows 的短路径处理中文安装目录。
 
 ## 项目结构
 

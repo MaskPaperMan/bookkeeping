@@ -11,7 +11,7 @@ from ledger.storage import InstanceLock, Store, data_directory
 from ledger.ui import App
 from ledger.runtime import check_tk_runtime
 from ledger.domain import LedgerError
-from ledger.branding import APP_NAME, configure_windows_app_id
+from ledger.branding import APP_NAME, configure_windows_app_id, configure_tk_paths
 
 
 def main(smoke_result=None):
@@ -21,6 +21,7 @@ def main(smoke_result=None):
         print(str(exc), file=sys.stderr)
         return 1
     configure_windows_app_id()
+    configure_tk_paths()
     root = tk.Tk()
     root.withdraw()
     lock = None

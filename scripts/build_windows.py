@@ -28,11 +28,14 @@ def main():
                            'requirements-build.txt'])
     subprocess.check_call([python, '-m', 'unittest', 'discover', '-v'])
     subprocess.check_call([python, '-m', 'PyInstaller', '--noconfirm', '--clean',
-                           '--onedir', '--windowed', '--name', '台账',
+                           '--onedir', '--windowed', '--name', 'Taizhang',
                            '--icon', 'assets/taizhang.ico', '--version-file', 'assets/windows-version.txt',
                            '--add-data', 'assets/taizhang.png;assets',
                            '--add-data', 'assets/taizhang.ico;assets', 'main.py'])
-    app = root / 'dist' / '台账'
+    # Tcl 8.6 in Python 3.8 reads environment paths through the Windows code page.
+    # Keep the runtime directory ASCII even though the displayed EXE name is Chinese.
+    app = root / 'dist' / 'Taizhang'
+    (app / 'Taizhang.exe').rename(app / '台账.exe')
     for name in ('README.md', 'WINDOWS-VALIDATION.md'):
         shutil.copyfile(str(root / name), str(app / name))
     # Test the frozen executable itself, not only the source interpreter.
