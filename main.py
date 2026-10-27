@@ -1,5 +1,7 @@
 import logging
+import argparse
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 import sys
 import tkinter as tk
 from tkinter import messagebox
@@ -10,7 +12,7 @@ from ledger.runtime import check_tk_runtime
 from ledger.domain import LedgerError
 
 
-def main():
+def main(smoke_result=None):
     try:
         check_tk_runtime(sys.platform, tk.TkVersion)
     except LedgerError as exc:
@@ -38,8 +40,15 @@ def main():
             logging.error('界面异常', exc_info=(kind, value, traceback))
             messagebox.showerror('操作失败', '发生错误，请重新检查操作。\n' + str(value), parent=root)
         root.report_callback_exception = callback_error
-        App(root, store)
+        app = App(root, store)
         root.deiconify()
+        if smoke_result:
+            def finish_smoke_test():
+                if not app.clients.winfo_ismapped() or not app.transactions.winfo_ismapped():
+                    raise RuntimeError('Application widgets did not become visible')
+                Path(smoke_result).write_text('ok', encoding='ascii')
+                root.quit()
+            root.after(500, finish_smoke_test)
         root.mainloop()
         return 0
     except Exception as exc:
@@ -58,4 +67,7 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description='客户往来记账')
+    parser.add_argument('--smoke-test', help=argparse.SUPPRESS)
+    arguments = parser.parse_args()
+    sys.exit(main(arguments.smoke_test))

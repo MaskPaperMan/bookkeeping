@@ -4,6 +4,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -31,6 +32,20 @@ def main():
     app = root / 'dist' / 'CustomerLedger'
     for name in ('README.md', 'WINDOWS-VALIDATION.md'):
         shutil.copyfile(str(root / name), str(app / name))
+    # Test the frozen executable itself, not only the source interpreter.
+    with tempfile.TemporaryDirectory() as folder:
+        result = Path(folder) / 'smoke-result.txt'
+        child_env = dict(os.environ)
+        child_env['LOCALAPPDATA'] = str(Path(folder) / 'appdata')
+        subprocess.run([str(app / 'CustomerLedger.exe'), '--smoke-test', str(result)],
+                       env=child_env, check=True, timeout=30)
+        if not result.exists() or result.read_text(encoding='ascii') != 'ok':
+            raise SystemExit('Frozen EXE failed to render application widgets.')
+    (app / 'BUILD-INFO.txt').write_text(
+        'Python: ' + sys.version + '\nArchitecture: x86\nPyInstaller: 4.8\nCommit: ' +
+        os.environ.get('GITHUB_SHA', 'local build') +
+        '\nSource tests and frozen EXE startup smoke test passed.\n'
+        'Windows 7 SP1 x86/x64 runtime acceptance is still required.\n', encoding='utf-8')
     output = root / 'dist' / 'CustomerLedger-win7-x86.zip'
     with zipfile.ZipFile(str(output), 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(app.rglob('*')):

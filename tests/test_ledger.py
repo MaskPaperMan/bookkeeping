@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -13,6 +14,14 @@ from ledger.runtime import check_tk_runtime
 
 
 class AmountTests(unittest.TestCase):
+    def test_failed_connection_setup_closes_database(self):
+        connection = Mock()
+        connection.execute.side_effect = [None, sqlite3.DatabaseError('file is not a database')]
+        with patch('ledger.storage.sqlite3.connect', return_value=connection):
+            with self.assertRaises(sqlite3.DatabaseError):
+                Store._connect('broken.sqlite3')
+        connection.close.assert_called_once()
+
     def test_reject_legacy_macos_tk_before_window_creation(self):
         with self.assertRaises(LedgerError):
             check_tk_runtime('darwin', 8.5)

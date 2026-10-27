@@ -88,9 +88,14 @@ class Store:
     @staticmethod
     def _connect(path):
         db = sqlite3.connect(str(path), timeout=10)
-        db.row_factory = sqlite3.Row
-        db.execute('PRAGMA foreign_keys=ON')
-        db.execute('PRAGMA synchronous=FULL')
+        try:
+            db.row_factory = sqlite3.Row
+            db.execute('PRAGMA foreign_keys=ON')
+            db.execute('PRAGMA synchronous=FULL')
+        except Exception:
+            # 损坏的备份可能在设置 PRAGMA 时就报错，Windows 上须立即关闭文件句柄。
+            db.close()
+            raise
         return db
 
     @staticmethod

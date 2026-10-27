@@ -9,7 +9,7 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     paths = [root / name for name in ('main.py', 'README.md', 'WINDOWS-VALIDATION.md',
              'requirements-build.txt', 'build_windows.bat', '.gitignore', 'pyproject.toml',
-             'uv.lock', '.python-version')]
+             'uv.lock', '.python-version', '.github/workflows/windows-build.yml')]
     for folder in ('ledger', 'scripts', 'tests'):
         paths.extend((root / folder).glob('*.py'))
     with zipfile.ZipFile(str(output), 'w', zipfile.ZIP_DEFLATED) as archive:
