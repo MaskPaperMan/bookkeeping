@@ -3,6 +3,7 @@ import argparse
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import sys
+import traceback
 import tkinter as tk
 from tkinter import messagebox
 
@@ -40,27 +41,36 @@ def main(smoke_result=None):
             messagebox.showwarning('自动备份失败', '账本仍可使用，请尽快手动备份。\n' + str(exc), parent=root)
         def callback_error(kind, value, traceback):
             logging.error('界面异常', exc_info=(kind, value, traceback))
+            if smoke_result:
+                import traceback as traceback_module
+                Path(smoke_result + '.error.txt').write_text(
+                    ''.join(traceback_module.format_exception(kind, value, traceback)), encoding='utf-8')
+                root.quit()
+                return
             messagebox.showerror('操作失败', '发生错误，请重新检查操作。\n' + str(value), parent=root)
         root.report_callback_exception = callback_error
         app = App(root, store)
         root.deiconify()
         if smoke_result:
+            def finish_expense_smoke_test():
+                if not app.expense_page.table.winfo_ismapped():
+                    raise RuntimeError('Expense page did not become visible')
+                Path(smoke_result).write_text('ok', encoding='ascii')
+                root.quit()
             def finish_smoke_test():
                 if not app.clients.winfo_ismapped() or not app.transactions.winfo_ismapped():
                     raise RuntimeError('Application widgets did not become visible')
                 app.notebook.select(app.expense_tab)
-                root.update_idletasks()
-                if not app.expense_page.table.winfo_ismapped():
-                    raise RuntimeError('Expense page did not become visible')
-                app.notebook.select(app.income_tab)
-                root.update_idletasks()
-                Path(smoke_result).write_text('ok', encoding='ascii')
-                root.quit()
+                # Let native window events finish before checking the newly selected page.
+                root.after(250, finish_expense_smoke_test)
             root.after(500, finish_smoke_test)
         root.mainloop()
         return 0
     except Exception as exc:
         logging.exception('启动失败')
+        if smoke_result:
+            Path(smoke_result + '.error.txt').write_text(traceback.format_exc(), encoding='utf-8')
+            return 1
         messagebox.showerror('无法打开账本', str(exc), parent=root)
         return 1
     finally:
@@ -78,4 +88,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=APP_NAME)
     parser.add_argument('--smoke-test', help=argparse.SUPPRESS)
     arguments = parser.parse_args()
-    sys.exit(main(arguments.smoke_test))
+    try:
+        exit_code = main(arguments.smoke_test)
+    except Exception:
+        if not arguments.smoke_test:
+            raise
+        Path(arguments.smoke_test + '.error.txt').write_text(traceback.format_exc(), encoding='utf-8')
+        exit_code = 1
+    sys.exit(exit_code)

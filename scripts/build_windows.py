@@ -40,8 +40,15 @@ def main():
         result = Path(folder) / 'smoke-result.txt'
         child_env = dict(os.environ)
         child_env['LOCALAPPDATA'] = str(Path(folder) / 'appdata')
-        subprocess.run([str(app / '台账.exe'), '--smoke-test', str(result)],
-                       env=child_env, check=True, timeout=30)
+        try:
+            subprocess.run([str(app / '台账.exe'), '--smoke-test', str(result)],
+                           env=child_env, check=True, timeout=30)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            for diagnostic in (Path(str(result) + '.error.txt'),
+                               Path(child_env['LOCALAPPDATA']) / '客户往来记账' / 'errors.log'):
+                if diagnostic.exists():
+                    print(diagnostic.read_text(encoding='utf-8', errors='replace')[-12000:])
+            raise
         if not result.exists() or result.read_text(encoding='ascii') != 'ok':
             raise SystemExit('Frozen EXE failed to render application widgets.')
     (app / 'BUILD-INFO.txt').write_text(
